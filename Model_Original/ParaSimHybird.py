@@ -147,7 +147,7 @@ class ParaSimHybird:
         M = self.s_s
         s_num = M.shape[0]
         tol = 1.0e-6
-        alpha, max_iter, S_S, x, per, dangling_weights, is_dangling = PreparePageRankMatrix(M, alpha=0.85, max_iter=self.times, p=None, alreadysym=True)
+        alpha, max_iter, S_S, x, per, dangling_weights, is_dangling = PreparePageRankMatrix(M, alpha=0.85, max_iter=self.times, p=None, alreadysym=False)
         # alpha is a constant coefficient
         # max_iter is the maximum iteration times
         # S_S is the preprocessed sentence distance matrix
@@ -158,11 +158,11 @@ class ParaSimHybird:
         for i in range(max_iter):
             # -- update sentence weight --
             xlast = x.copy()  # get last updated x
-            sw = sum(xlast.T[is_dangling])  # sum all dangling nodes weight
-            x = alpha * xlast*S_S + alpha * sw * dangling_weights + (1 - alpha) * per  # update x as first kind of sentence weight
+            sw = sum(xlast[is_dangling])  # sum all dangling nodes weight
+            x = alpha * S_S * xlast + alpha * sw * dangling_weights + (1 - alpha) * per  # update x as first kind of sentence weight
             s = self.w_s.T * w  # update s using words weight as second kind of sentence weight
-            x = (1-bias)*x + bias*s.T  # combine two kinds of sentence weight
-            s = x.T  # update sentence weight
+            x = (1 - bias) * x + bias * s  # combine two kinds of sentence weight
+            s = x  # update sentence weight
             # -- update other weight --
             t = self.update_context_weigth(s)
             p = self.update_paragraph_weight_bycontext(t)
@@ -251,12 +251,11 @@ def PreparePageRankMatrix(M, alpha=0.85, max_iter=100, p=None, alreadysym=True):
     norm_M = NormalizeMatrix(M, 1)  # normalize M on row vector
     # -- prepare pagerank node weight vector --
     x = matrix(np.ones((s_num, 1), dtype=np.float)*1.0/s_num)
-    x = x.T
     # -- prepare vectors about dangling node --
     if p is None:
-        p = matrix(np.repeat(1.0/s_num, s_num))
-    dangling_weights = matrix(np.repeat(1.0/s_num, s_num))
-    is_dangling = FindDanglingNodes(norm_M, axis_id=1)
+        p = matrix(np.repeat(1.0/s_num, s_num)).T
+    dangling_weights = matrix(np.repeat(1.0/s_num, s_num)).T
+    is_dangling = FindDanglingNodes(norm_M, axis_id=0)
     return alpha, max_iter, norm_M, x, p, dangling_weights, is_dangling
 
 # ---- MyPageRankMatT: run pagerank only on sentence distance matrix, not involves iteration of paper structure ---- #
@@ -291,7 +290,7 @@ def TestRankSentence():
     nr, nc = model.s_s.shape
     # -- get sentence similarity by create_graph function and rewrite it in gm matrix --
     g = create_graph(pk)
-    gm = matrix(np.zeros((nr, nr), dtype=np.float))
+    gm = matrix(np.zeros((nr, nc), dtype=np.float))
     for i in range(nr):
         for j in g[i]:
             gm[i, j] = g[i][j]['weight']

@@ -33,7 +33,7 @@ from cmyConfFuncForRankModels import *
 #######################################################################################
 class CEIter_ParaCtx:
     # remove_stopwords: 0 means with stopwords; 1 means remove stopwords
-    def __init__(self, pickle_path, ceopt=default_ceopt, cesim_bias=default_cesim_bias, cebias=default_cebias,
+    def __init__(self, pickle_path, ceopt=default_ceopt, cesim_bias=default_cesim_bias, cebias=default_ceiter,
                  remove_stopwords=default_remove_stopword, iteration_times=default_itertime):
         self.w_s = None
         self.s_p = None
@@ -104,15 +104,18 @@ class CEIter_ParaCtx:
         if self.ceopt == 'sysce':
             ce_graph = self.syscesimgraph
         ce_matrix = np.zeros((len(self.text.sentenceset), len(self.text.sentenceset)), dtype=np.float)
-        for n, nbrs in ce_graph.adjacency():
+        for n, nbrs in ce_graph.adjacency_iter():
             for nbr, eattr in nbrs.items():
                 ce_matrix[(n, nbr)] = eattr['weight']
+        ce_matrix = NormMatrixByRow(np.matrix(ce_matrix))
         return ce_matrix
+
 
     def update_sentence_weight_with_ce(self, w, s, ce_s_matrix):
         s = self.w_s.T * w * (1-self.cebias) + ce_s_matrix * s * self.cebias
         s = normalize(s)
         return s
+
 
     def update_sentence_weight(self, w):
         s = self.w_s.T * w

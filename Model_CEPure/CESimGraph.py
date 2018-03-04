@@ -20,8 +20,8 @@ class CESimGraph:
         self.cesimbias = cesim_bias
         self.remove_stopwords = remove_stopwords
         self.text = LoadSxptext(pickle_path)
-        self.s = np.zeros(len(self.text.sentenceset))  # sentence weight, is a len(sentences) * 1 array
-        self.idx_s = []  # sentence idx ordered reversely by their iterated weight. idx_s is len(sentence)*2 matrix, each element is (row_idx, column_idx)
+        self.s = np.matrix(np.zeros(len(self.text.sentenceset))).T  # sentence weight, is a len(sentences) * 1 matrix
+        self.idx_s = []  # sentence idx ordered reversely by their iterated weight. idx_s is len(sentence)*1 matrix
         self.ranked_sentences = []
         self.section2sentence_id_list = {}
         self.mancesimgraph = MakeCESimSentGraph(self.text, "mance", bias=cesim_bias, remove_stopword=remove_stopwords)
@@ -41,13 +41,13 @@ class CESimGraph:
             return
         # create all sentence weight according to sid_sw_dict
         for sid, sw in sid_sw_dict.items():
-            self.s[sid] = sw
-        self.s = self.s.reshape((len(self.s), 1))  # change self.s from 1*len(sent) to len(sent)*1.
+            self.s[sid, 0] = sw
         # -- Delete sentences without cause-effect links from sent ranked idx --
-        idx_s_inc0 = list(argsort(array(-self.s), axis=0))  # The idx_s which contains 0 value sentences
+        idx_s_inc0 = np.argsort(-self.s, axis=0)
+        idx_s_inc0 = np.array(idx_s_inc0).reshape(-1,).tolist()  # The idx_s which contains 0 value sentences
         while self.s[idx_s_inc0[-1]] == 0:
             del idx_s_inc0[-1]
-        self.idx_s = array(idx_s_inc0).reshape(len(idx_s_inc0), 1)
+        self.idx_s = np.matrix(idx_s_inc0).T
 
 
 #######################################################################################

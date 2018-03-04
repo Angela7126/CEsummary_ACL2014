@@ -57,8 +57,10 @@ class CEBias_WordGraph:
         else:
             cesim_sw = Pagerank_CESimGraph_for_CEBias(self.syscesimgraph, len(self.text.sentenceset))
         # -- Get the combined sentence weight, which is obtained by [CEsim-sw*cebias + Para-sw*(1-cebias)]
-        self.s = self.s * (1 - self.cebias) + cesim_sw * self.cebias
-        self.s = normalize(self.s)
+        if len(cesim_sw) == len(self.s):
+            print "combine ce-sim-graph sentweight with iteration weight"
+            self.s = self.s * (1 - self.cebias) + cesim_sw * self.cebias
+            self.s = normalize(self.s)
         # -- rank words, sents index lists --
         self.idx_s = argsort(array(-self.s), axis=0).reshape(len(self.s),1)
 

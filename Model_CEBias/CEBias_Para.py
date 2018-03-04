@@ -18,6 +18,12 @@ class CEBias_Para:
     # remove_stopwords: 0 means with stopwords; 1 means remove stopwords
     def __init__(self, pickle_path, ceopt=default_ceopt, cesim_bias=default_cesim_bias, cebias=default_cebias,
                  remove_stopwords=default_remove_stopword, iteration_times=default_itertime):
+        self.remove_stopwords = remove_stopwords
+        self.times = iteration_times
+        self.ceopt = ceopt
+        self.cebias = cebias
+        self.cesimbias = cesim_bias
+        self.text = LoadSxptext(pickle_path)  # sxpText object
         self.w_s = None  # word_sentence matrix
         self.s_p = None  # sentence_paragraph matrix
         self.p_c = None  # paragraph_section matrix
@@ -30,20 +36,16 @@ class CEBias_Para:
         self.idx_p = []  # paragraph idx ordered reversely by their iterated weight. idx_p is len(paragraph)*2 matrix, each element is (row_idx, column_idx)
         self.idx_c = []  # section idx ordered reversely by their iterated weight. idx_c is len(section)*2 matrix, each element is (row_idx, column_idx)
         self.words = []   # keywords list
-        self.times = iteration_times
-        self.ceopt = ceopt
-        self.cebias = cebias
-        self.cesimbias = cesim_bias
-        self.remove_stopwords = remove_stopwords
-        self.text = LoadSxptext(pickle_path)  # sxpText object
         self.section2sentence_id_list = {}  # i.e. {"1 Introduction": [8,9,10,11...21]; "2 Semantic Link":[22,23,...,31]; ...}
         self.ranked_sentences = []
-        self.mancesimgraph = MakeCESimSentGraph(self.text, "mance", bias=cesim_bias, remove_stopword=remove_stopwords)
-        self.syscesimgraph = MakeCESimSentGraph(self.text, "sysce", bias=cesim_bias, remove_stopword=remove_stopwords)
         if remove_stopwords == 0:
             self.get_parameters_with_stopwords()  # assign values to words, w_s, s_p, p_c
         elif remove_stopwords == 1:
             self.get_parameters_without_stopwords()
+
+        self.mancesimgraph = MakeCESimSentGraph(self.text, "mance", bias=cesim_bias, remove_stopword=remove_stopwords)
+        self.syscesimgraph = MakeCESimSentGraph(self.text, "sysce", bias=cesim_bias, remove_stopword=remove_stopwords)
+
         w = matrix(random.rand(len(self.words))).T  # Initial words weight vector
         self.iteration(w)
         self.rank_weight_cebias()  # get idx_w, idx_s, idx_p, idx_c
@@ -112,16 +114,18 @@ class CEBias_Para:
     # -- rank_weight_CEBias: get idx_w, idx_s, idx_p, idx_c -- #
     def rank_weight_cebias(self):
         if self.ceopt == "mance":
-            cesim_sw = Pagerank_CESimGraph_for_CEBias(self.mancesimgraph,len(self.text.sentenceset))
+            cesim_sw = Pagerank_CESimGraph_for_CEBias(self.mancesimgraph, len(self.text.sentenceset))
         else:
-            cesim_sw = Pagerank_CESimGraph_for_CEBias(self.syscesimgraph,len(self.text.sentenceset))
+            cesim_sw = Pagerank_CESimGraph_for_CEBias(self.syscesimgraph, len(self.text.sentenceset))
         # -- rank words, sents, paras, secs index lists --
         self.idx_w = argsort(array(-self.w), axis=0)
         self.idx_p = argsort(array(-self.p), axis=0)
         self.idx_c = argsort(array(-self.c), axis=0)
         # -- Get the combined sentence weight, which is obtained by [CEsim-sw*cebias + Para-sw*(1-cebias)]
-        self.s = self.s*(1-self.cebias) + cesim_sw*self.cebias
-        self.s = normalize(self.s)
+        if len(cesim_sw) == len(self.s):
+            print "combine ce-sim-graph sentweight with iteration weight"
+            self.s = self.s*(1-self.cebias) + cesim_sw*self.cebias
+            self.s = normalize(self.s)
         # -- rank sentences index lists --
         self.idx_s = argsort(array(-self.s), axis=0)
 

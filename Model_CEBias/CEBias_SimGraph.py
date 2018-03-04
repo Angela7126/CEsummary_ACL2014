@@ -21,15 +21,15 @@ class CEBias_SimGraph:
     # text: stores the sxpText object for the paper
     def __init__(self, pickle_path, ceopt=default_ceopt, cesim_bias=default_cesim_bias, cebias=default_cebias,
                  remove_stopwords=default_remove_stopword):
-        self.s = []  # sentence weight, is a len(sentences) * 1 array
-        self.idx_s = []  # sentence idx ordered reversely by their iterated weight. idx_s is len(sentence)*2 matrix, each element is (row_idx, column_idx)
-        self.ranked_sentences = []
-        self.section2sentence_id_list = {}
         self.remove_stopwords = remove_stopwords
         self.ceopt = ceopt
         self.cebias = cebias
         self.cesimbias = cesim_bias
         self.text = LoadSxptext(pickle_path)
+        self.s = []  # sentence weight, is a len(sentences) * 1 array
+        self.idx_s = []  # sentence idx ordered reversely by their iterated weight. idx_s is len(sentence)*2 matrix, each element is (row_idx, column_idx)
+        self.ranked_sentences = []
+        self.section2sentence_id_list = {}
         self.mancesimgraph = MakeCESimSentGraph(self.text, "mance", bias=cesim_bias, remove_stopword=remove_stopwords)
         self.syscesimgraph = MakeCESimSentGraph(self.text, "sysce", bias=cesim_bias, remove_stopword=remove_stopwords)
         self.page_rank_cebias()
@@ -46,8 +46,10 @@ class CEBias_SimGraph:
         else:
             cesim_sw = Pagerank_CESimGraph_for_CEBias(self.syscesimgraph, len(self.text.sentenceset))
         # -- Get the combined sentence weight, which is obtained by [CEsim-sw*cebias + Para-sw*(1-cebias)]
-        self.s = self.s * (1 - self.cebias) + cesim_sw * self.cebias
-        self.s = normalize(self.s)
+        if len(cesim_sw) == len(self.s):
+            print "combine ce-sim-graph sentweight with iteration weight"
+            self.s = self.s * (1 - self.cebias) + cesim_sw * self.cebias
+            self.s = normalize(self.s)
         # -- rank sentences index lists --
         self.idx_s = argsort(array(-self.s), axis=0).reshape(len(self.s), 1)
 

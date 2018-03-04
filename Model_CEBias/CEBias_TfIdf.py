@@ -16,16 +16,16 @@ from cmyConfFuncForRankModels import *
 class CEBias_TfIdf:
     def __init__(self, pickle_path, ceopt=default_ceopt, cesim_bias=default_cesim_bias, cebias=default_cebias,
                  remove_stopwords=default_remove_stopword):
+        self.remove_stopwords = remove_stopwords
+        self.ceopt = ceopt
+        self.cebias = cebias
+        self.cesimbias = cesim_bias
         self.text = LoadSxptext(pickle_path)
         self.words = self.text.sentence_tfidf.word
         self.count_words = []
         self.w_s = []
         self.s = []
         self.idx_s = []
-        self.remove_stopwords = remove_stopwords
-        self.ceopt = ceopt
-        self.cebias = cebias
-        self.cesimbias = cesim_bias
         self.ranked_sentences = []
         self.section2sentence_id_list = {}
         self.mancesimgraph = MakeCESimSentGraph(self.text, "mance", bias=cesim_bias, remove_stopword=remove_stopwords)
@@ -88,8 +88,10 @@ class CEBias_TfIdf:
         else:
             cesim_sw = Pagerank_CESimGraph_for_CEBias(self.syscesimgraph, len(self.text.sentenceset))
         # -- Get the combined sentence weight, which is obtained by [CEsim-sw*cebias + Para-sw*(1-cebias)]
-        self.s = self.s * (1 - self.cebias) + cesim_sw * self.cebias
-        self.s = normalize(self.s)
+        if len(cesim_sw) == len(self.s):
+            print "combine ce-sim-graph sentweight with iteration weight"
+            self.s = self.s * (1 - self.cebias) + cesim_sw * self.cebias
+            self.s = normalize(self.s)
         # -- rank sentences index lists --
         self.idx_s = argsort(array(-self.s), axis=0)
 

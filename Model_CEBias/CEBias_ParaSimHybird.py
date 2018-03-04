@@ -40,8 +40,14 @@ default_bias = 0.5
 #######################################################################################
 class CEBias_ParaSimHybird:
     # remove_stopwords: 0 means with stopwords; 1 means remove stopwords
-    def __init__(self, pickle_path, ceopt=default_ceopt, cesim_bias=default_cesim_bias, cebias=default_cebias,
+    def __init__(self, pickle_path, ceopt=default_ceopt, cesim_bias=default_cesim_bias, cebias=default_ceiter,
                  remove_stopwords=default_remove_stopword, iteration_times=default_itertime):
+        self.times = iteration_times
+        self.remove_stopwords = remove_stopwords
+        self.ceopt = ceopt
+        self.cebias = cebias
+        self.cesimbias = cesim_bias
+        self.text = LoadSxptext(pickle_path)
         self.w_s = None
         self.s_p = None
         self.p_c = None
@@ -58,26 +64,21 @@ class CEBias_ParaSimHybird:
         self.idx_c = []
         self.idx_t = []
         self.words = []
-        self.times = iteration_times
-        self.ceopt = ceopt
-        self.cebias = cebias
-        self.cesimbias = cesim_bias
-        self.remove_stopwords = remove_stopwords
-        self.text = LoadSxptext(pickle_path)
         self.s_s = []  # stores a Jaccard distance matrix between sentences
         self.section2sentence_id_list = {}
         self.ranked_sentence = []
-        self.mancesimgraph = MakeCESimSentGraph(self.text, "mance", bias=cesim_bias, remove_stopword=remove_stopwords)
-        self.syscesimgraph = MakeCESimSentGraph(self.text, "sysce", bias=cesim_bias, remove_stopword=remove_stopwords)
 
         if remove_stopwords == 0:
             self.get_parameters_with_stopwords()  # assign values to words, w_s, s_p, p_c
         elif remove_stopwords == 1:
             self.get_parameters_without_stopwords()
 
+        self.mancesimgraph = MakeCESimSentGraph(self.text, "mance", bias=cesim_bias, remove_stopword=remove_stopwords)
+        self.syscesimgraph = MakeCESimSentGraph(self.text, "sysce", bias=cesim_bias, remove_stopword=remove_stopwords)
+        self.s_s = MakeSentSentMatrix(self.text.sentenceset, remove_stopwords)
+
         w = matrix(random.rand(len(self.words))).T
         s = matrix(random.rand(len(self.text.sentenceset))).T
-        self.s_s = MakeSentSentMatrix(self.text.sentenceset, remove_stopwords)
         self.iterationhybird(w, s)
         self.rank_weight_cebias()  # get idx_w, idx_s, idx_p, idx_c
         self.ranked_sentences, self.section2sentence_id_list = ordered_sentence_id_set(self.text, self.idx_s)
@@ -132,8 +133,10 @@ class CEBias_ParaSimHybird:
         self.idx_c = argsort(array(-self.c), axis=0)
         self.idx_t = argsort(array(-self.t), axis=0)
         # -- Get the combined sentence weight, which is obtained by [CEsim-sw*cebias + Para-sw*(1-cebias)]
-        self.s = self.s * (1 - self.cebias) + cesim_sw * self.cebias
-        self.s = normalize(self.s)
+        if len(cesim_sw) == len(self.s):
+            print "combine ce-sim-graph sentweight with iteration weight"
+            self.s = self.s * (1 - self.cebias) + cesim_sw * self.cebias
+            self.s = normalize(self.s)
         # -- rank sentences index lists --
         self.idx_s = argsort(array(-self.s), axis=0)
 
@@ -163,7 +166,7 @@ class CEBias_ParaSimHybird:
         M = self.s_s
         s_num = M.shape[0]
         tol = 1.0e-6
-        alpha, max_iter, S_S, x, per, dangling_weights, is_dangling = PreparePageRankMatrix(M, alpha=0.85, max_iter=self.times, p=None, alreadysym=True)
+        alpha, max_iter, S_S, x, per, dangling_weights, is_dangling = PreparePageRankMatrix(M, alpha=0.85, max_iter=self.times, p=None, alreadysym=False)
         # alpha is a constant coefficient
         # max_iter is the maximum iteration times
         # S_S is the preprocessed sentence distance matrix
@@ -174,11 +177,11 @@ class CEBias_ParaSimHybird:
         for i in range(max_iter):
             # -- update sentence weight --
             xlast = x.copy()  # get last updated x
-            sw = sum(xlast.T[is_dangling])  # sum all dangling nodes weight
-            x = alpha * xlast*S_S + alpha * sw * dangling_weights + (1 - alpha) * per  # update x as first kind of sentence weight
+            sw = sum(xlast[is_dangling])  # sum all dangling nodes weight
+            x = alpha * S_S * xlast + alpha * sw * dangling_weights + (1 - alpha) * per  # update x as first kind of sentence weight
             s = self.w_s.T * w  # update s using words weight as second kind of sentence weight
-            x = (1-bias)*x + bias*s.T  # combine two kinds of sentence weight
-            s = x.T  # update sentence weight
+            x = (1-bias)*x + bias*s  # combine two kinds of sentence weight
+            s = x  # update sentence weight
             # -- update other weight --
             t = self.update_context_weigth(s)
             p = self.update_paragraph_weight_bycontext(t)
@@ -267,12 +270,11 @@ def PreparePageRankMatrix(M, alpha=0.85, max_iter=100, p=None, alreadysym=True):
     norm_M = NormalizeMatrix(M, 1)  # normalize M on row vector
     # -- prepare pagerank node weight vector --
     x = matrix(np.ones((s_num, 1), dtype=np.float)*1.0/s_num)
-    x = x.T
     # -- prepare vectors about dangling node --
     if p is None:
-        p = matrix(np.repeat(1.0/s_num, s_num))
-    dangling_weights = matrix(np.repeat(1.0/s_num, s_num))
-    is_dangling = FindDanglingNodes(norm_M, axis_id=1)
+        p = matrix(np.repeat(1.0/s_num, s_num)).T
+    dangling_weights = matrix(np.repeat(1.0/s_num, s_num)).T
+    is_dangling = FindDanglingNodes(norm_M, axis_id=0)
     return alpha, max_iter, norm_M, x, p, dangling_weights, is_dangling
 
 # ---- MyPageRankMatT: run pagerank only on sentence distance matrix, not involves iteration of paper structure ---- #
